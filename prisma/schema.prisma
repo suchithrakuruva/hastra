@@ -1,0 +1,342 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String          @id @default(uuid())
+  name             String
+  phone            String          @unique
+  email            String?         @unique
+  passwordHash     String
+  role             String          @default("SELLER") // SELLER, BUYER, ADMIN
+  preferredLang    String          @default("en")     // en, hi, te
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  sellerProfile    SellerProfile?
+  buyerProfile     BuyerProfile?
+  notifications    Notification[]
+  reviews          Review[]
+  auditLogs        AuditLog[]
+  messagesSent     Message[]       @relation("SentMessages")
+  messagesReceived Message[]       @relation("ReceivedMessages")
+  favorites        Favorite[]
+}
+
+model SellerProfile {
+  id                     String                    @id @default(uuid())
+  userId                 String                    @unique
+  user                   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopName               String
+  craftType              String                    // Handloom, Woodcraft, Terracotta, Bamboo, etc.
+  productCategory        String
+  location               String
+  state                  String
+  district               String
+  yearsOfExperience      Int                       @default(1)
+  numberOfWorkers        Int                       @default(1)
+  productionCapacity     String                    // e.g. "50 units/month"
+  gstin                  String?
+  udyamReg               String?
+  bankDetails            String?
+  panNumber              String?
+  artisanCert            String?
+  govtSchemeInfo         String?
+  story                  String?                   // "Meet the Artisan" story
+  isVerified             Boolean                   @default(false)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  products               Product[]
+  documents              SellerDocument[]
+  govtLinks              GovernmentMarketplaceLink[]
+  quotes                 Quote[]
+  orders                 Order[]
+}
+
+model BuyerProfile {
+  id                     String                    @id @default(uuid())
+  userId                 String                    @unique
+  user                   User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName            String
+  buyerType              String                    @default("RETAILER") // RETAILER, WHOLESALER, BOUTIQUE, EXPORTER, CORPORATE, GOVERNMENT, OTHER
+  gstin                  String?
+  businessLocation       String?
+  procurementCategories String?                   // Comma-separated or JSON
+  isVerified             Boolean                   @default(false)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+
+  rfqs                   RFQ[]
+  orders                 Order[]
+  buyerRequirements      BuyerRequirement[]
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  icon        String?
+  description String?
+  products    Product[]
+}
+
+model Product {
+  id                  String             @id @default(uuid())
+  sellerProfileId     String
+  sellerProfile       SellerProfile      @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  categoryId          String?
+  category            Category?          @relation(fields: [categoryId], references: [id])
+  
+  title               String
+  shortDescription    String?
+  detailedDescription String?
+  craftType           String
+  material            String
+  origin              String?
+  dimensions          String?
+  weight              String?
+  color               String?
+  careInstructions    String?
+  isHandmade          Boolean            @default(true)
+  
+  price               Float
+  minOrderQty         Int                @default(1)
+  bulkPrice           Float?
+  estimatedProdTime   String?            // e.g. "3-5 days"
+  
+  status              String             @default("ACTIVE") // DRAFT, ACTIVE, ARCHIVED
+  keywords            String?            // Comma separated
+  
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  images              ProductImage[]
+  inventory           Inventory?
+  priceSuggestions    PriceSuggestion[]
+  aiListings          AIListing[]
+  rfqs                RFQ[]
+  orderItems          OrderItem[]
+  reviews             Review[]
+  favorites           Favorite[]
+}
+
+model ProductImage {
+  id           String   @id @default(uuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  originalUrl  String
+  enhancedUrl  String?
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model Inventory {
+  id                String   @id @default(uuid())
+  productId         String   @unique
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityAvailable Int      @default(0)
+  reservedQty       Int      @default(0)
+  lowStockThreshold Int      @default(5)
+  updatedAt         DateTime @updatedAt
+}
+
+model RFQ {
+  id                    String            @id @default(uuid())
+  buyerProfileId        String
+  buyerProfile          BuyerProfile      @relation(fields: [buyerProfileId], references: [id])
+  productId             String?
+  product               Product?          @relation(fields: [productId], references: [id])
+  
+  title                 String
+  quantityRequired      Int
+  deliveryLocation      String
+  requiredByDate        DateTime?
+  targetBudget          Float?
+  customizationDetails  String?
+  status                String            @default("OPEN") // OPEN, QUOTED, ACCEPTED, REJECTED, CLOSED
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  quotes                Quote[]
+}
+
+model Quote {
+  id                String       @id @default(uuid())
+  rfqId             String
+  rfq               RFQ          @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  sellerProfileId   String
+  sellerProfile     SellerProfile @relation(fields: [sellerProfileId], references: [id])
+  
+  offeredPrice      Float
+  quantityAvailable Int
+  productionDays    Int
+  shippingEstimate  Float?
+  terms             String?
+  status            String       @default("PENDING") // PENDING, ACCEPTED, REJECTED, COUNTERED
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Order {
+  id               String       @id @default(uuid())
+  orderNumber      String       @unique
+  buyerProfileId   String
+  buyerProfile     BuyerProfile @relation(fields: [buyerProfileId], references: [id])
+  sellerProfileId  String
+  sellerProfile    SellerProfile @relation(fields: [sellerProfileId], references: [id])
+  
+  totalAmount      Float
+  status           String       @default("PENDING") // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+  shippingAddress  String
+  paymentStatus    String       @default("PENDING") // PENDING, PAID, REFUNDED
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  items            OrderItem[]
+  transactions     Transaction[]
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id])
+  amount        Float
+  paymentMethod String   @default("UPI") // UPI, BANK_TRANSFER, CARD, COD
+  gatewayTxnId  String?
+  status        String   @default("SUCCESS")
+  createdAt     DateTime @default(now())
+}
+
+model PriceSuggestion {
+  id              String   @id @default(uuid())
+  productId       String?
+  product         Product? @relation(fields: [productId], references: [id])
+  rawMaterialCost Float
+  laborCost       Float
+  packagingCost   Float
+  shippingCost    Float
+  desiredMargin   Float
+  suggestedMin    Float
+  suggestedMax    Float
+  suggestedExact  Float
+  explanation     String?
+  createdAt       DateTime @default(now())
+}
+
+model AIListing {
+  id           String   @id @default(uuid())
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id])
+  promptUsed   String?
+  rawAiOutput  String?
+  lang         String   @default("en")
+  createdAt    DateTime @default(now())
+}
+
+model VoiceInput {
+  id             String   @id @default(uuid())
+  sellerId       String
+  audioUrl       String?
+  transcription  String
+  detectedLang   String   @default("hi")
+  createdAt      DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   // ORDER, RFQ, AI_STUDIO, SYSTEM
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rating    Int      @default(5)
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model BuyerRequirement {
+  id             String       @id @default(uuid())
+  buyerProfileId String
+  buyerProfile   BuyerProfile @relation(fields: [buyerProfileId], references: [id], onDelete: Cascade)
+  category       String
+  minQuantity    Int
+  targetPrice    Float?
+  description    String
+  createdAt      DateTime     @default(now())
+}
+
+model SellerDocument {
+  id              String        @id @default(uuid())
+  sellerProfileId String
+  sellerProfile   SellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  docType         String        // GSTIN_CERT, UDYAM_CERT, ARTISAN_ID, PAN
+  fileUrl         String
+  isVerified      Boolean       @default(false)
+  uploadedAt      DateTime      @default(now())
+}
+
+model GovernmentMarketplaceLink {
+  id              String        @id @default(uuid())
+  sellerProfileId String
+  sellerProfile   SellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  platformName    String        // GeM, CraftData, TribesIndia, ONDC
+  externalId      String?
+  syncStatus      String        @default("PENDING") // PENDING, SYNCED, ERROR
+  lastSyncedAt    DateTime?
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  senderId    String
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  content     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

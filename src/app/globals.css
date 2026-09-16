@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+:root {
+  --background: #FAF8F3;
+  --foreground: #263238;
+  
+  --primary-indigo: #243B53;
+  --terracotta: #C65D3B;
+  --terracotta-hover: #b04e2f;
+  --warm-sand: #F4EBDD;
+  --off-white: #FAF8F3;
+  --forest-green: #3E6650;
+  --charcoal: #263238;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-indigo: #243B53;
+  --color-terracotta: #C65D3B;
+  --color-sand: #F4EBDD;
+  --color-offwhite: #FAF8F3;
+  --color-forest: #3E6650;
+  --color-charcoal: #263238;
+}
+
+body {
+  background-color: var(--off-white);
+  color: var(--charcoal);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 100vh;
+}
+
+/* Custom Utilities for Artisan Experience */
+.bg-earth-sand {
+  background-color: #F4EBDD;
+}
+
+.bg-earth-indigo {
+  background-color: #243B53;
+}
+
+.bg-earth-terracotta {
+  background-color: #C65D3B;
+}
+
+.bg-earth-forest {
+  background-color: #3E6650;
+}
+
+.text-earth-terracotta {
+  color: #C65D3B;
+}
+
+.text-earth-indigo {
+  color: #243B53;
+}
+
+.text-earth-forest {
+  color: #3E6650;
+}
+
+.border-earth-sand {
+  border-color: #E2D7C3;
+}
+
+/* Glassmorphism soft card */
+.soft-card {
+  background: #ffffff;
+  border: 1px solid #EAE3D2;
+  box-shadow: 0 4px 12px rgba(36, 59, 83, 0.05);
+  border-radius: 1rem;
+}
+
+.soft-card-hover {
+  transition: all 0.2s ease-in-out;
+}
+.soft-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(36, 59, 83, 0.08);
+}
+
+/* Accessible touch targets for low-literacy users */
+.btn-touch {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-terracotta {
+  background-color: #C65D3B;
+  color: #ffffff;
+}
+.btn-terracotta:hover {
+  background-color: #b04e2f;
+}
+
+.btn-indigo {
+  background-color: #243B53;
+  color: #ffffff;
+}
+.btn-indigo:hover {
+  background-color: #1a2c3f;
+}
+
+/* Voice pulse effect */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(198, 93, 59, 0.6); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 16px rgba(198, 93, 59, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(198, 93, 59, 0); }
+}
+
+.voice-pulse {
+  animation: pulse-ring 2s infinite;
+}
