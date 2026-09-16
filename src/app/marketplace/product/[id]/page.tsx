@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import { MapPin, ShieldCheck, Clock, Package, Award, Sparkles, MessageSquare, ShoppingCart, Send, ChevronRight } from 'lucide-react';
+import { MapPin, ShieldCheck, Clock, Package, Award, Sparkles, MessageSquare, ShoppingCart, Send, ChevronRight, CheckCircle2 } from 'lucide-react';
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -54,6 +54,28 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       }
     } catch (e) {
       alert('Failed to submit quote request. Make sure you are logged in.');
+    }
+  };
+
+  const handleContactSeller = async () => {
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipientId: product.sellerProfile?.userId,
+          productId: product.id,
+          content: `Hi ${product.sellerProfile?.shopName || 'Artisan'}, I am interested in your product "${product.title}". Could you provide more details?`
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        router.push('/buyer/enquiries');
+      } else {
+        alert(data.error || 'Please sign in as a buyer to send enquiries.');
+      }
+    } catch (e) {
+      alert('Failed to send message. Please log in.');
     }
   };
 
@@ -176,7 +198,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => alert(`Directly messaging ${seller?.shopName}...`)}
+                  onClick={handleContactSeller}
                   className="btn-touch btn-indigo text-sm flex items-center justify-center gap-1.5"
                 >
                   <MessageSquare className="w-4 h-4" /> Contact Seller

@@ -2,87 +2,105 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionFromRequest } from '@/lib/auth';
 
+// GET: Fetch RFQs based on user role
 export async function GET(req: NextRequest) {
   try {
     const session = getSessionFromRequest(req);
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Please log in to view RFQs.' }, { status: 401 });
     }
 
-    let rfqs = [];
     if (session.role === 'BUYER' && session.buyerProfileId) {
-      rfqs = await prisma.rFQ.findMany({
+      // Return buyer's own RFQs with received quotes
+      const rfqs = await prisma.rFQ.findMany({
         where: { buyerProfileId: session.buyerProfileId },
         include: {
           product: { include: { images: true } },
-          quotes: { include: { sellerProfile: true } }
+          quotes: {
+            include: {
+              sellerProfile: {
+                select: { shopName: true, craftType: true, location: true, state: true, isVerified: true }
+              }
+            }
+          }
         },
         orderBy: { createdAt: 'desc' }
       });
-    } else if (session.role === 'SELLER' && session.sellerProfileId) {
-      rfqs = await prisma.rFQ.findMany({
-        where: {
-          OR: [
-            { product: { sellerProfileId: session.sellerProfileId } },
-            { quotes: { some: { sellerProfileId: session.sellerProfileId } } }
-          ]
-        },
-        include: {
-          product: { include: { images: true } },
-          buyerProfile: { include: { user: { select: { name: true, phone: true } } } },
-          quotes: { where: { sellerProfileId: session.sellerProfileId } }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-    } else {
-      rfqs = await prisma.rFQ.findMany({
-        include: { product: true, quotes: true },
-        take: 20
-      });
+      return NextResponse.json({ success: true, rfqs });
     }
 
-    return NextResponse.json({ success: true, count: rfqs.length, rfqs });
+    if (session.role === 'SELLER' && session.sellerProfileId) {
+      // Return open/quoted RFQs relevant to seller's category (market view)
+      const rfqs = await prisma.rFQ.findMany({
+        where: { status: { in: ['OPEN', 'QUOTED'] } },
+        include: {
+          product: { include: { images: true } },
+          buyerProfile: {
+            select: { companyName: true, buyerType: true, businessLocation: true }
+          },
+          quotes: {
+            where: { sellerProfileId: session.sellerProfileId }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      });
+      return NextResponse.json({ success: true, rfqs });
+    }
+
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   } catch (err: any) {
-    return NextResponse.json({ error: 'Failed to fetch RFQs' }, { status: 500 });
+    console.error('RFQ GET error:', err);
+    return NextResponse.json({ error: 'Failed to load RFQs' }, { status: 500 });
   }
 }
 
+// POST: Create a new RFQ (Buyer only)
 export async function POST(req: NextRequest) {
   try {
     const session = getSessionFromRequest(req);
     if (!session || session.role !== 'BUYER' || !session.buyerProfileId) {
-      return NextResponse.json({ error: 'Only registered buyers can request quotes' }, { status: 401 });
+      return NextResponse.json({ error: 'Only authenticated buyers can create RFQs.' }, { status: 401 });
     }
 
+    const body = await req.json();
     const {
-      productId,
       title,
       quantityRequired,
       deliveryLocation,
+      requiredByDate,
       targetBudget,
-      customizationDetails
-    } = await req.json();
+      customizationDetails,
+      productId
+    } = body;
 
     if (!title || !quantityRequired || !deliveryLocation) {
-      return NextResponse.json({ error: 'Missing required RFQ fields' }, { status: 400 });
+      return NextResponse.json({
+        error: 'Title, quantity required, and delivery location are mandatory.'
+      }, { status: 400 });
     }
 
     const rfq = await prisma.rFQ.create({
       data: {
         buyerProfileId: session.buyerProfileId,
-        productId: productId || null,
-        title,
+        title: title.trim(),
         quantityRequired: Number(quantityRequired),
-        deliveryLocation,
+        deliveryLocation: deliveryLocation.trim(),
+        requiredByDate: requiredByDate ? new Date(requiredByDate) : null,
         targetBudget: targetBudget ? Number(targetBudget) : null,
-        customizationDetails,
+        customizationDetails: customizationDetails?.trim() || null,
+        productId: productId || null,
         status: 'OPEN'
+      },
+      include: {
+        quotes: true,
+        product: { include: { images: true } }
       }
     });
 
-    return NextResponse.json({ success: true, rfq });
+    return NextResponse.json({ success: true, rfq }, { status: 201 });
   } catch (err: any) {
-    console.error('Error creating RFQ:', err);
-    return NextResponse.json({ error: 'Failed to submit quote request' }, { status: 500 });
+    console.error('RFQ POST error:', err);
+    return NextResponse.json({ error: 'Failed to create RFQ' }, { status: 500 });
   }
 }

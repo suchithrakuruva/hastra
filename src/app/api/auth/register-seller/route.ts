@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
       phone,
       email,
       password,
+      confirmPassword,
       preferredLang = 'en',
       shopName,
       craftType,
@@ -21,37 +22,57 @@ export async function POST(req: NextRequest) {
       numberOfWorkers = 1,
       productionCapacity = '50 items/month',
       gstin,
-      udyamReg,
-      bankDetails,
-      panNumber,
-      artisanCert,
-      govtSchemeInfo
+      udyamReg
     } = body;
 
     if (!name || !phone || !password || !shopName || !craftType) {
-      return NextResponse.json({ error: 'Missing required seller fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Please fill in all mandatory seller fields.' }, { status: 400 });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { phone } });
-    if (existingUser) {
-      return NextResponse.json({ error: 'Mobile number already registered' }, { status: 400 });
+    if (confirmPassword && password !== confirmPassword) {
+      return NextResponse.json({ error: 'Password and confirm password do not match.' }, { status: 400 });
     }
 
-    // Create user and seller profile
+    const normalizedPhone = phone.replace(/\s+/g, '');
+
+    // Check duplicate mobile number
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: normalizedPhone },
+          { phone: `+91${normalizedPhone}` },
+          { phone: normalizedPhone.replace(/^\+91/, '') }
+        ]
+      }
+    });
+
+    if (existingPhone) {
+      return NextResponse.json({ error: 'This mobile number is already registered. Please sign in.' }, { status: 400 });
+    }
+
+    // Check duplicate email if email is provided
+    if (email) {
+      const existingEmail = await prisma.user.findUnique({ where: { email: email.trim() } });
+      if (existingEmail) {
+        return NextResponse.json({ error: 'This email address is already registered. Please sign in.' }, { status: 400 });
+      }
+    }
+
+    // Create user with seller profile
     const user = await prisma.user.create({
       data: {
         name,
-        phone,
-        email: email || null,
-        passwordHash: password, // Store password string for demo/dev
+        phone: normalizedPhone,
+        email: email ? email.trim() : null,
+        passwordHash: password,
         role: 'SELLER',
         preferredLang,
         sellerProfile: {
           create: {
             shopName,
             craftType,
-            productCategory: productCategory || 'Handicrafts',
-            location: location || 'Craft Hub',
+            productCategory: productCategory || 'Handloom & Textiles',
+            location: location || 'Village Craft Hub',
             state: state || 'Telangana',
             district: district || 'Bhuvanagiri',
             yearsOfExperience: Number(yearsOfExperience) || 1,
@@ -59,10 +80,6 @@ export async function POST(req: NextRequest) {
             productionCapacity,
             gstin: gstin || null,
             udyamReg: udyamReg || null,
-            bankDetails: bankDetails || null,
-            panNumber: panNumber || null,
-            artisanCert: artisanCert || null,
-            govtSchemeInfo: govtSchemeInfo || null,
             isVerified: true
           }
         }
@@ -93,7 +110,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set('hastra_token', token, { httpOnly: true, path: '/' });
     return res;
   } catch (err: any) {
-    console.error('Error in register-seller:', err);
+    console.error('Register Seller error:', err);
     return NextResponse.json({ error: err.message || 'Registration failed' }, { status: 500 });
   }
 }

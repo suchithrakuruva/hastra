@@ -6,23 +6,15 @@ export async function GET(req: NextRequest) {
   try {
     const session = getSessionFromRequest(req);
     
-    // Default fallback to first demo seller if session not active
-    let sellerProfileId = session?.sellerProfileId;
-    if (!sellerProfileId) {
-      const firstSeller = await prisma.sellerProfile.findFirst({
-        include: { user: true }
-      });
-      sellerProfileId = firstSeller?.id;
-    }
-
-    if (!sellerProfileId) {
-      return NextResponse.json({ error: 'Seller profile not found' }, { status: 404 });
+    // Strict authentication check - no fallback to arbitrary seller
+    if (!session || session.role !== 'SELLER' || !session.sellerProfileId) {
+      return NextResponse.json({ error: 'Unauthorized seller access. Please log in.' }, { status: 401 });
     }
 
     const seller = await prisma.sellerProfile.findUnique({
-      where: { id: sellerProfileId },
+      where: { id: session.sellerProfileId },
       include: {
-        user: { select: { name: true, phone: true, preferredLang: true } },
+        user: { select: { name: true, phone: true, email: true, preferredLang: true } },
         products: { include: { images: true, inventory: true } },
         orders: { include: { items: true, buyerProfile: true }, orderBy: { createdAt: 'desc' } },
         quotes: { include: { rfq: true } }
@@ -30,7 +22,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!seller) {
-      return NextResponse.json({ error: 'Seller not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Seller profile not found' }, { status: 404 });
     }
 
     const totalProducts = seller.products.length;
@@ -38,11 +30,10 @@ export async function GET(req: NextRequest) {
     const pendingOrders = seller.orders.filter(o => o.status === 'PENDING').length;
     const totalRevenue = seller.orders.reduce((acc, curr) => acc + curr.totalAmount, 0);
     const totalInventory = seller.products.reduce((acc, p) => acc + (p.inventory?.quantityAvailable || 0), 0);
-    
-    // Count buyer enquiries (RFQs matching seller products)
+
     const buyerEnquiriesCount = await prisma.rFQ.count({
       where: {
-        product: { sellerProfileId }
+        product: { sellerProfileId: session.sellerProfileId }
       }
     });
 
@@ -51,6 +42,7 @@ export async function GET(req: NextRequest) {
       sellerName: seller.user.name,
       shopName: seller.shopName,
       craftType: seller.craftType,
+      preferredLang: seller.user.preferredLang || 'en',
       stats: {
         productsListed: totalProducts,
         totalOrders,
@@ -63,7 +55,7 @@ export async function GET(req: NextRequest) {
       recentOrders: seller.orders.slice(0, 5)
     });
   } catch (err: any) {
-    console.error('Error fetching seller dashboard:', err);
+    console.error('Error in seller dashboard API:', err);
     return NextResponse.json({ error: 'Failed to load seller dashboard' }, { status: 500 });
   }
 }

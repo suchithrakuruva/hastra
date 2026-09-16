@@ -2,23 +2,25 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Navbar from '@/components/Navbar';
-import { KeyRound, Phone, ArrowRight, Store, ShoppingBag, Sparkles } from 'lucide-react';
+import { KeyRound, AtSign, ArrowRight, Store, ShoppingBag, Sparkles, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async (e?: React.FormEvent, customPhone?: string, customPass?: string) => {
+  const handleLogin = async (e?: React.FormEvent, customId?: string, customPass?: string) => {
     if (e) e.preventDefault();
-    const p = customPhone || phone;
+    const id = customId || identifier;
     const pwd = customPass || password;
 
-    if (!p || !pwd) {
-      setError('Please enter your mobile number and password.');
+    if (!id || !pwd) {
+      setError('Please enter your mobile number or email address and password.');
       return;
     }
 
@@ -28,7 +30,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: p, password: pwd })
+        body: JSON.stringify({ identifier: id, password: pwd })
       });
 
       const data = await res.json();
@@ -38,24 +40,26 @@ export default function LoginPage() {
 
       if (data.user.role === 'SELLER') {
         router.push('/seller/dashboard');
+      } else if (data.user.role === 'BUYER') {
+        router.push('/buyer/dashboard');
       } else {
         router.push('/marketplace');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials');
+      setError(err.message || 'Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const fillDemoSeller = () => {
-    setPhone('+919876543210');
+    setIdentifier('+919876543210');
     setPassword('password123');
     handleLogin(undefined, '+919876543210', 'password123');
   };
 
   const fillDemoBuyer = () => {
-    setPhone('+919999988888');
+    setIdentifier('+919999988888');
     setPassword('password123');
     handleLogin(undefined, '+919999988888', 'password123');
   };
@@ -105,15 +109,18 @@ export default function LoginPage() {
 
           <form onSubmit={e => handleLogin(e)} className="space-y-4">
             <div>
-              <label className="block text-sm font-bold text-[#243B53] mb-1">Mobile Number</label>
+              <label className="block text-sm font-bold text-[#243B53] mb-1">
+                Email Address or Mobile Number
+              </label>
               <div className="relative">
-                <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
+                <AtSign className="w-4 h-4 text-gray-400 absolute left-3.5 top-3.5" />
                 <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="+91 9876543210"
-                  className="w-full bg-[#FAF8F3] border border-[#EAE3D2] rounded-xl pl-10 pr-4 py-3 text-sm text-[#243B53]"
+                  type="text"
+                  value={identifier}
+                  onChange={e => setIdentifier(e.target.value)}
+                  placeholder="e.g. lakshmi@handlooms.in or +91 9876543210"
+                  className="w-full bg-[#FAF8F3] border border-[#EAE3D2] rounded-xl pl-10 pr-4 py-3 text-sm text-[#243B53] focus:outline-none focus:border-[#C65D3B]"
+                  autoComplete="username"
                   required
                 />
               </div>
@@ -121,24 +128,53 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm font-bold text-[#243B53] mb-1">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Enter password"
-                className="w-full bg-[#FAF8F3] border border-[#EAE3D2] rounded-xl px-4 py-3 text-sm text-[#243B53]"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full bg-[#FAF8F3] border border-[#EAE3D2] rounded-xl px-4 py-3 pr-11 text-sm text-[#243B53] focus:outline-none focus:border-[#C65D3B]"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3.5 text-gray-400 hover:text-[#243B53]"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full btn-touch btn-terracotta text-lg flex items-center justify-center gap-2 mt-4 shadow-md"
+              className="w-full btn-touch btn-terracotta text-lg flex items-center justify-center gap-2 mt-4 shadow-md disabled:opacity-70"
             >
               {loading ? 'Authenticating...' : 'Sign In'} <ArrowRight className="w-5 h-5" />
             </button>
           </form>
+
+          {/* Register Options */}
+          <div className="border-t border-[#EAE3D2] pt-4 text-center space-y-2">
+            <p className="text-xs text-gray-500 font-medium">Don&apos;t have an account?</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href="/auth/register-seller"
+                className="text-xs font-bold text-[#C65D3B] border border-[#C65D3B] px-3 py-2 rounded-lg hover:bg-[#F4EBDD] transition-colors text-center"
+              >
+                Register as Seller
+              </Link>
+              <Link
+                href="/auth/register-buyer"
+                className="text-xs font-bold text-[#243B53] border border-[#243B53] px-3 py-2 rounded-lg hover:bg-[#F4EBDD] transition-colors text-center"
+              >
+                Register as Buyer
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     </div>

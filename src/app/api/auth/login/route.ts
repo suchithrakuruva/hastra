@@ -4,19 +4,38 @@ import { signToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const { phone, password } = await req.json();
+    const { identifier, phone, email, password } = await req.json();
+    const loginInput = (identifier || phone || email || '').trim();
 
-    if (!phone || !password) {
-      return NextResponse.json({ error: 'Phone and password are required' }, { status: 400 });
+    if (!loginInput || !password) {
+      return NextResponse.json({ error: 'Please enter your email/mobile number and password.' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { phone },
+    // Detect if input is Email or Mobile Number
+    const isEmail = loginInput.includes('@');
+    
+    // Normalize mobile number (strip spaces/dashes)
+    let normalizedPhone = loginInput;
+    if (!isEmail) {
+      normalizedPhone = loginInput.replace(/\s+/g, '').replace(/-/g, '');
+    }
+
+    // Search user by email OR phone
+    const user = await prisma.user.findFirst({
+      where: isEmail
+        ? { email: loginInput.toLowerCase() }
+        : {
+            OR: [
+              { phone: normalizedPhone },
+              { phone: `+91${normalizedPhone}` },
+              { phone: normalizedPhone.replace(/^\+91/, '') }
+            ]
+          },
       include: { sellerProfile: true, buyerProfile: true }
     });
 
     if (!user || user.passwordHash !== password) {
-      return NextResponse.json({ error: 'Invalid mobile number or password' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid mobile/email or password.' }, { status: 401 });
     }
 
     const token = signToken({
@@ -26,7 +45,7 @@ export async function POST(req: NextRequest) {
       role: user.role as 'SELLER' | 'BUYER' | 'ADMIN',
       sellerProfileId: user.sellerProfile?.id,
       buyerProfileId: user.buyerProfile?.id,
-      preferredLang: user.preferredLang
+      preferredLang: user.preferredLang || 'en'
     });
 
     const res = NextResponse.json({
@@ -35,6 +54,7 @@ export async function POST(req: NextRequest) {
         id: user.id,
         name: user.name,
         role: user.role,
+        preferredLang: user.preferredLang,
         sellerProfile: user.sellerProfile,
         buyerProfile: user.buyerProfile
       },
@@ -44,7 +64,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set('hastra_token', token, { httpOnly: true, path: '/' });
     return res;
   } catch (err: any) {
-    console.error('Login error:', err);
+    console.error('Login API error:', err);
     return NextResponse.json({ error: 'Authentication failed' }, { status: 500 });
   }
 }
